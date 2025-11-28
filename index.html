@@ -1,0 +1,567 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Generator Kartu Ujian</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        /* Mengatur font dasar */
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+
+        /* Pengaturan Halaman Cetak F4 */
+        @media print {
+            html, body {
+                margin: 0 !important;
+                padding: 0 !important;
+                width: 21.5cm;
+                height: 33cm;
+            }
+            .no-print {
+                display: none !important;
+            }
+            #print-area {
+                margin: 0 auto !important;
+                padding: 0 !important;
+                box-shadow: none;
+                page-break-after: always; /* Pastikan setiap #print-area memulai halaman baru */
+            }
+            .exam-card {
+                page-break-inside: avoid;
+            }
+        }
+
+        /* Ukuran kertas F4 */
+        @page {
+            size: 215mm 330mm; /* F4 */
+            margin: 0; 
+        }
+
+        /* Layout kartu ujian */
+        #print-area {
+            width: 21.5cm;
+            height: 33cm;
+            margin: 0 auto;
+            background-color: white;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+            padding: 0; /* Padding dihapus untuk mengandalkan justify-content */
+            box-sizing: border-box;
+            display: grid;
+            grid-template-columns: 9cm 9cm; /* Lebar kartu diatur 9cm per kolom */
+            grid-auto-rows: 6cm;
+            gap: 0px; 
+            align-content: center;
+            justify-content: center; /* Ini akan menengahkan blok 18cm di dalam halaman 21.5cm */
+        }
+
+        /* Kartu ujian */
+        .exam-card {
+            height: 6cm;
+            width: 9cm; 
+            overflow: hidden;
+            position: relative;
+            background-color: white;
+            box-sizing: border-box;
+            border: 2.25pt solid #4A934A;
+            padding: 4px;
+        }
+        
+        /* Menata placeholder awal */
+        #print-container > .placeholder {
+            width: 21.5cm;
+            height: 33cm;
+        }
+
+        /* Desain header */
+        .card-header {
+            background-color: #4A934A; /* Warna hijau dari gambar */
+            color: white;
+            padding: 8px;
+            position: relative;
+        }
+
+        /* Styling untuk Watermark */
+        .card-body {
+            position: relative;
+            flex-grow: 1;
+        }
+        .watermark {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 0;
+            opacity: 0.1;
+            width: 80%;
+            height: 80%;
+            background-size: contain;
+            background-position: center;
+            background-repeat: no-repeat;
+        }
+        .card-content {
+            position: relative;
+            z-index: 1;
+        }
+    </style>
+</head>
+<body class="bg-gray-100">
+
+    <div class="flex flex-col lg:flex-row min-h-screen">
+        <!-- Panel Kontrol -->
+        <div class="no-print lg:w-1/4 bg-white p-6 shadow-lg overflow-y-auto">
+            <h2 class="text-2xl font-bold mb-6 text-gray-800">Pengaturan Kartu</h2>
+            
+            <div class="space-y-4">
+                <div>
+                    <label for="school-name" class="block text-sm font-medium text-gray-700">Nama Yayasan</label>
+                    <input type="text" id="foundation-name" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" value="YAYASAN MASJID NURUL KAUTSAR">
+                </div>
+                <div>
+                    <label for="school-name" class="block text-sm font-medium text-gray-700">Nama Sekolah</label>
+                    <input type="text" id="school-name" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" value="SD IT NURUL KAUTSAR">
+                </div>
+                <div>
+                    <label for="school-year" class="block text-sm font-medium text-gray-700">Tahun Ajaran</label>
+                    <input type="text" id="school-year" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" value="TAHUN AJARAN 2025/2026">
+                </div>
+                <div>
+                    <label for="logo-upload" class="block text-sm font-medium text-gray-700">Logo Sekolah</label>
+                    <input type="file" id="logo-upload" accept="image/*" class="mt-1 block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-600 hover:file:bg-indigo-100">
+                    <img id="logo-preview" src="https://placehold.co/100x100/FFFFFF/000000?text=Logo" alt="Logo Preview" class="mt-2 h-20 w-20 object-contain border rounded-md p-1">
+                </div>
+                <div>
+                    <label for="watermark-upload" class="block text-sm font-medium text-gray-700">Watermark Kartu</label>
+                    <input type="file" id="watermark-upload" accept="image/*" class="mt-1 block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-600 hover:file:bg-indigo-100">
+                    <img id="watermark-preview" src="" alt="Watermark Preview" class="mt-2 h-20 w-20 object-contain border rounded-md p-1 hidden">
+                </div>
+            </div>
+
+            <!-- Fitur Gemini API -->
+            <div class="mt-8 pt-6 border-t border-gray-200">
+                <h3 class="text-lg font-bold mb-4 text-gray-800 flex items-center">
+                    Fitur AI 
+                    <span class="text-xl ml-2">✨</span>
+                </h3>
+                <div class="space-y-4">
+                    <div>
+                        <label for="ai-message" class="block text-sm font-medium text-gray-700">Pesan Semangat di Kartu</label>
+                        <textarea id="ai-message" rows="3" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">Semoga sukses! Kerjakan dengan jujur dan teliti.</textarea>
+                    </div>
+                    <button id="generate-message-button" class="w-full bg-purple-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-purple-700 transition-colors flex items-center justify-center">
+                        <svg id="ai-spinner" class="animate-spin -ml-1 mr-3 h-5 w-5 text-white hidden" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        <span id="ai-button-text">✨ Buat Pesan Baru</span>
+                    </button>
+                </div>
+            </div>
+
+            <div class="mt-8 space-y-3">
+                <button id="load-data" class="w-full bg-blue-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-blue-700 transition-colors flex items-center justify-center">
+                    <svg id="load-spinner" class="animate-spin -ml-1 mr-3 h-5 w-5 text-white hidden" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    <span id="load-text">Muat Data Siswa</span>
+                </button>
+                <button id="print-button" class="w-full bg-green-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-green-700 transition-colors">
+                    Cetak Halaman Ini
+                </button>
+                <button id="print-all-button" class="w-full bg-red-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-red-700 transition-colors">
+                    Cetak Semua Halaman
+                </button>
+            </div>
+             <div id="pagination-controls" class="mt-6 text-center no-print hidden">
+                <button id="prev-page" class="px-4 py-2 bg-gray-300 rounded-md hover:bg-gray-400 disabled:opacity-50 disabled:cursor-not-allowed">Sebelumnya</button>
+                <span id="page-info" class="mx-4 font-medium"></span>
+                <button id="next-page" class="px-4 py-2 bg-gray-300 rounded-md hover:bg-gray-400 disabled:opacity-50 disabled:cursor-not-allowed">Berikutnya</button>
+            </div>
+
+        </div>
+
+        <!-- Area Cetak -->
+        <div class="flex-1 bg-gray-200 overflow-auto flex items-center justify-center p-8" id="preview-panel">
+            <div id="print-container">
+                 <!-- Halaman akan digenerate di sini -->
+                 <div class="placeholder bg-white shadow-lg mx-auto flex items-center justify-center text-gray-500">
+                       <span>Pratinjau kartu akan muncul di sini setelah data dimuat.</span>
+                 </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const loadButton = document.getElementById('load-data');
+        const loadSpinner = document.getElementById('load-spinner');
+        const loadText = document.getElementById('load-text');
+        const printContainer = document.getElementById('print-container');
+        const printButton = document.getElementById('print-button');
+        const printAllButton = document.getElementById('print-all-button'); // Tombol baru
+        
+        // Input fields
+        const foundationNameInput = document.getElementById('foundation-name');
+        const schoolNameInput = document.getElementById('school-name');
+        const schoolYearInput = document.getElementById('school-year');
+        const logoUploadInput = document.getElementById('logo-upload');
+        const logoPreview = document.getElementById('logo-preview');
+        const watermarkUploadInput = document.getElementById('watermark-upload');
+        const watermarkPreview = document.getElementById('watermark-preview');
+
+        // Gemini AI Feature Elements
+        const generateMessageButton = document.getElementById('generate-message-button');
+        const aiSpinner = document.getElementById('ai-spinner');
+        const aiButtonText = document.getElementById('ai-button-text');
+        const aiMessage = document.getElementById('ai-message');
+
+        // Pagination
+        const paginationControls = document.getElementById('pagination-controls');
+        const prevPageButton = document.getElementById('prev-page');
+        const nextPageButton = document.getElementById('next-page');
+        const pageInfo = document.getElementById('page-info');
+
+        let allStudents = [];
+        let currentPage = 1;
+        const studentsPerPage = 10;
+        let totalPages = 1;
+        let logoUrl = logoPreview.src;
+        let watermarkUrl = '';
+
+        // URL Google Sheet
+        const sheetUrl = 'https://script.google.com/macros/s/AKfycbxDFyiI9ZhFBHTJFXAWhc46APwPyYWumHrQ2pogKnsuAMqx_GCgh5pUN83i0tnCjME/exec';
+
+        // Event Listener untuk memuat data
+        loadButton.addEventListener('click', async () => {
+            loadSpinner.classList.remove('hidden');
+            loadText.textContent = 'Memuat...';
+            loadButton.disabled = true;
+
+            try {
+                const response = await fetch(sheetUrl);
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                const data = await response.json();
+                
+                if (Array.isArray(data)) {
+                    allStudents = data
+                        .filter(student => student.nama && student.nama.trim() !== '')
+                        .sort((a, b) => {
+                            const classComparison = String(a.kelas || '').localeCompare(String(b.kelas || ''));
+                            if (classComparison !== 0) {
+                                return classComparison;
+                            }
+                            return String(a.nama || '').localeCompare(String(b.nama || ''));
+                        });
+                        
+                    totalPages = Math.ceil(allStudents.length / studentsPerPage);
+                    currentPage = 1;
+                    renderPage(currentPage);
+                    paginationControls.classList.remove('hidden');
+                } else {
+                    throw new Error("Struktur data dari Google Sheet tidak sesuai. Respons bukan sebuah array.");
+                }
+
+            } catch (error) {
+                console.error("Gagal memuat data siswa:", error);
+                printContainer.innerHTML = `<div class="bg-white shadow-lg mx-auto flex items-center justify-center text-red-500" style="width: 21.5cm; height: 33cm;">Gagal memuat data. Periksa konsol untuk detail error.</div>`;
+            } finally {
+                loadSpinner.classList.add('hidden');
+                loadText.textContent = 'Muat Ulang Data';
+                loadButton.disabled = false;
+            }
+        });
+        
+        // Event listener untuk Tombol Cetak Halaman Ini
+        printButton.addEventListener('click', () => {
+            if (allStudents.length === 0) {
+                alert("Silakan muat data siswa terlebih dahulu.");
+                return;
+            }
+
+            const printContent = document.getElementById('print-area').innerHTML;
+            const styles = document.querySelector('style').innerHTML;
+
+            const newWin = window.open('', '_blank');
+            newWin.document.write(`
+                <html>
+                    <head>
+                        <title>Cetak Kartu Ujian</title>
+                        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+                        <script src="https://cdn.tailwindcss.com"><\/script>
+                        <style>
+                            ${styles}
+                        </style>
+                    </head>
+                    <body onload="window.print(); window.close();">
+                        <div id="print-area">
+                            ${printContent}
+                        </div>
+                    </body>
+                </html>
+            `);
+            newWin.document.close();
+        });
+
+        // Event listener untuk Tombol Cetak Semua Halaman
+        printAllButton.addEventListener('click', () => {
+            if (allStudents.length === 0) {
+                alert("Silakan muat data siswa terlebih dahulu.");
+                return;
+            }
+
+            const styles = document.querySelector('style').innerHTML;
+            let allPagesHtml = '';
+
+            for (let i = 0; i < totalPages; i++) {
+                const startIndex = i * studentsPerPage;
+                const endIndex = startIndex + studentsPerPage;
+                const studentsOnPage = allStudents.slice(startIndex, endIndex);
+
+                let pageHtml = '<div id="print-area">';
+                studentsOnPage.forEach(student => {
+                    pageHtml += createCard(student);
+                });
+
+                const emptySlots = studentsPerPage - studentsOnPage.length;
+                for (let j = 0; j < emptySlots; j++) {
+                    pageHtml += `<div class="exam-card"></div>`;
+                }
+                pageHtml += '</div>';
+                allPagesHtml += pageHtml;
+            }
+
+            const newWin = window.open('', '_blank');
+            newWin.document.write(`
+                <html>
+                    <head>
+                        <title>Cetak Semua Kartu Ujian</title>
+                        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+                        <script src="https://cdn.tailwindcss.com"><\/script>
+                        <style>
+                            ${styles}
+                        </style>
+                    </head>
+                    <body onload="window.print(); window.close();">
+                        ${allPagesHtml}
+                    </body>
+                </html>
+            `);
+            newWin.document.close();
+        });
+
+
+        // Event listener untuk fitur Gemini API
+        generateMessageButton.addEventListener('click', async () => {
+            aiSpinner.classList.remove('hidden');
+            aiButtonText.textContent = 'Membuat...';
+            generateMessageButton.disabled = true;
+
+            try {
+                const apiKey = ""; // API key dikelola oleh environment
+                const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
+
+                const payload = {
+                    "contents": [{
+                        "parts": [{
+                            "text": "Buatkan satu kalimat pesan semangat yang singkat, positif, dan umum untuk siswa sekolah dasar yang akan mengikuti ujian. Maksimal 15 kata."
+                        }]
+                    }]
+                };
+
+                const response = await fetch(apiUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                if (!response.ok) {
+                    throw new Error(`API Error: ${response.statusText}`);
+                }
+
+                const result = await response.json();
+                const message = result.candidates[0].content.parts[0].text;
+                aiMessage.value = message.trim().replace(/"/g, '');
+
+                if (allStudents.length > 0) {
+                    renderPage(currentPage);
+                }
+
+            } catch (error) {
+                console.error("Gagal membuat pesan semangat:", error);
+                alert("Gagal membuat pesan. Silakan coba lagi.");
+            } finally {
+                aiSpinner.classList.add('hidden');
+                aiButtonText.textContent = '✨ Buat Pesan Baru';
+                generateMessageButton.disabled = false;
+            }
+        });
+        
+        // Event Listener untuk update logo
+        logoUploadInput.addEventListener('change', (event) => {
+            const file = event.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    logoUrl = e.target.result;
+                    logoPreview.src = logoUrl;
+                    if(allStudents.length > 0) renderPage(currentPage);
+                }
+                reader.readAsDataURL(file);
+            }
+        });
+
+         // Event listener untuk watermark
+        watermarkUploadInput.addEventListener('change', (event) => {
+            const file = event.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    watermarkUrl = e.target.result;
+                    watermarkPreview.src = watermarkUrl;
+                    watermarkPreview.classList.remove('hidden');
+                    if(allStudents.length > 0) renderPage(currentPage);
+                }
+                reader.readAsDataURL(file);
+            }
+        });
+
+        // Event Listener untuk update teks secara real-time
+        [foundationNameInput, schoolNameInput, schoolYearInput, aiMessage].forEach(input => {
+            input.addEventListener('input', () => {
+                if(allStudents.length > 0) renderPage(currentPage);
+            });
+        });
+
+        // Pagination listeners
+        prevPageButton.addEventListener('click', () => {
+            if (currentPage > 1) {
+                currentPage--;
+                renderPage(currentPage);
+            }
+        });
+
+        nextPageButton.addEventListener('click', () => {
+            if (currentPage < totalPages) {
+                currentPage++;
+                renderPage(currentPage);
+            }
+        });
+
+        // Fungsi untuk render kartu per halaman
+        function renderPage(page) {
+            printContainer.innerHTML = ''; // Kosongkan kontainer
+            const startIndex = (page - 1) * studentsPerPage;
+            const endIndex = page * studentsPerPage;
+            const studentsOnPage = allStudents.slice(startIndex, endIndex);
+
+            const pageElement = document.createElement('div');
+            pageElement.id = 'print-area';
+
+            let cardHtml = '';
+            studentsOnPage.forEach(student => {
+                 cardHtml += createCard(student);
+            });
+            
+            // Menambahkan slot kosong agar grid selalu penuh (10 kartu)
+            const emptySlots = studentsPerPage - studentsOnPage.length;
+            for (let i = 0; i < emptySlots; i++) {
+                cardHtml += `<div class="exam-card"></div>`;
+            }
+
+            pageElement.innerHTML = cardHtml;
+            printContainer.appendChild(pageElement);
+            
+            updatePaginationUI();
+        }
+
+        function updatePaginationUI() {
+            pageInfo.textContent = `Halaman ${currentPage} dari ${totalPages}`;
+            prevPageButton.disabled = currentPage === 1;
+            nextPageButton.disabled = currentPage === totalPages;
+        }
+
+        // Fungsi untuk membuat HTML satu kartu
+        function createCard(student) {
+            const foundationName = foundationNameInput.value;
+            const schoolName = schoolNameInput.value;
+            const schoolYear = schoolYearInput.value;
+            const motivationalMessage = aiMessage.value;
+
+            let usernameRow = '';
+            const studentClass = (student.kelas || '').toString();
+            if (studentClass.startsWith('4') || studentClass.startsWith('5') || studentClass.startsWith('6')) {
+                usernameRow = `
+                    <tr>
+                        <td class="font-semibold pr-1">USERNAME</td>
+                        <td class="pr-1">:</td>
+                        <td>${student.username || 'N/A'}</td>
+                    </tr>
+                `;
+            }
+
+            // Logika untuk menampilkan pesan semangat secara kondisional
+            let motivationalMessageHtml = '';
+            if (!studentClass.startsWith('4') && !studentClass.startsWith('5') && !studentClass.startsWith('6')) {
+                motivationalMessageHtml = `
+                    <!-- Pesan Semangat -->
+                    <div class="text-center text-xs italic text-gray-600 px-4 pb-2 card-content">
+                        <p>"${motivationalMessage}"</p>
+                    </div>
+                `;
+            }
+            
+            const watermarkStyle = watermarkUrl ? `background-image: url('${watermarkUrl}')` : '';
+
+            return `
+                <div class="exam-card flex flex-col">
+                    <!-- Header Kartu -->
+                    <div class="card-header flex items-center space-x-2">
+                        <div class="flex-shrink-0">
+                            <img src="${logoUrl}" alt="Logo" class="h-12 w-12 bg-white rounded-full p-0.5 object-contain">
+                        </div>
+                        <div class="text-white text-center flex-grow">
+                            <p class="text-xs font-bold">${foundationName.toUpperCase()}</p>
+                            <p class="text-sm font-bold">${schoolName.toUpperCase()}</p>
+                            <p class="text-xs">${schoolYear.toUpperCase()}</p>
+                        </div>
+                    </div>
+
+                    <!-- Body Kartu -->
+                    <div class="card-body">
+                        <div class="watermark" style="${watermarkStyle}"></div>
+                        <div class="card-content p-3 pt-2 text-black flex flex-col">
+                           <h3 class="text-center font-bold text-lg mb-1">KARTU UJIAN</h3>
+                           <table class="text-sm w-full">
+                                <tbody>
+                                    <tr>
+                                        <td class="font-semibold w-1/4 pr-1">NAMA</td>
+                                        <td class="w-auto pr-1">:</td>
+                                        <td class="truncate">${student.nama || 'N/A'}</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="font-semibold pr-1">NISN</td>
+                                        <td class="pr-1">:</td>
+                                        <td>${student.nisn || 'N/A'}</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="font-semibold pr-1">KELAS</td>
+                                        <td class="pr-1">:</td>
+                                        <td>${student.kelas || 'N/A'}</td>
+                                    </tr>
+                                    ${usernameRow}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    ${motivationalMessageHtml}
+                </div>
+            `;
+        }
+        
+    </script>
+</body>
+</html>
